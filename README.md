@@ -1,4 +1,4 @@
-# Porcine_Cysticercosis_Uganda
+# Porcine Cysticercosis risk map for Uganda
 This repo contains the code used for produce the Porcine Cysticercosis risk map in Uganda, for an ILRI consultancy project with Galmed. 
 
 
