@@ -7,4 +7,4 @@ This repo contains the code used for produce the Porcine Cysticercosis risk map 
 1. code3, is a code in R markdown that will output several maps and reflects the different test and manipulation done to create the risk map
 2. description is the final document submitted for the report 
 
-Note that not all the data used are public. Please contact me if you want to to get access to the data. 
+Note that not all the data used are public. Please contact me if you want to to get access to the data. (c.pfeifer@cgiar.org)
