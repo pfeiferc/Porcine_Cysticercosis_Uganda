@@ -1,0 +1,468 @@
+---
+title: "Pig data in Uganda for Michel"
+author: "Catherine and Stephen"
+date: "23 October 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE, cache=T)
+```
+
+
+# The data
+
+We are extracting the DHS standard survey of 2011. We have extracted
+1. toilet that a household use
+2. number of livestock owned by the households
+3. a couple of household charateristics
+
+```{r dataprep, echo = F, warning = F, message = F}
+path<-'D:/Dropbox/Dione'
+setwd(path)
+library(foreign)
+library(maptools)
+library(ggplot2)
+library(gstat)
+library(raster)
+library(colorspace)
+library(rgeos)
+data<-read.spss('UGA_2012_60/HR.SAV', to.data.frame = T,use.value.labels = FALSE)
+geo<-readShapePoints('UGA_2012_60/GE.shp')
+shp<-readShapePoly('UGA_2012_60/sdr_subnational_boundaries.shp')
+admin<-readShapePoly('admin-gdam/UGA_adm1.shp')
+admin$NAME_1<-as.character(admin$NAME_1)
+admin$label<-NA
+admin$label[(admin$NAME_1=='Lira'|admin$NAME_1=='Masaka'|admin$NAME_1=='Mukono'|admin$NAME_1=='Kamuli'|admin$NAME_1=='Hoima'|admin$NAME_1=='Moyo'|admin$NAME_1=='Kumi'|admin$NAME_1=='Apac'|admin$NAME_1=='Kaberamaido'|admin$NAME_1=='Soroti'|admin$NAME_1=='Kayunga')]<-admin$NAME_1[(admin$NAME_1=='Lira'|admin$NAME_1=='Masaka'|admin$NAME_1=='Mukono'|admin$NAME_1=='Kamuli'|admin$NAME_1=='Hoima'|admin$NAME_1=='Moyo'|admin$NAME_1=='Kumi'|admin$NAME_1=='Apac'|admin$NAME_1=='Kaberamaido'|admin$NAME_1=='Soroti'|admin$NAME_1=='Kayunga')]
+shp2<-fortify(shp)
+admin2<-fortify(admin)
+#data$HV246G <-as.numeric(data$HV246G )
+data$Pg_num<-ifelse(data$HV246G >95.5,NA,data$HV246G)
+data$Pg_h<-ifelse (data$Pg_num>0,1,0)
+data$Pg_2<-ifelse (data$Pg_num==1|data$Pg_num==2&data$HV025=='Rural',1,0)
+data$wc1<-ifelse(data$HV205=='31'|data$HV205=='25'|data$HV205=='24',1,0)
+data$wc2<-ifelse(data$HV205=='31',1,0)
+data$w1<-ifelse(data$HV270=='1',1,0)
+data$w2<-ifelse(data$HV270=='2',1,0)
+data$w3<-ifelse(data$HV270=='3',1,0)
+data$w4<-ifelse(data$HV270=='4',1,0)
+data$w5<-ifelse(data$HV270=='5',1,0)
+
+myClu = geo@data
+myClu<-myClu[which(!myClu$LONGNUM==0),]
+
+myClu = myClu[,c("DHSCC","DHSCLUST","DHSREGCO","DHSREGNA","URBAN_RURA", "ADM1NAME", "LONGNUM","LATNUM")]
+names(myClu)=c("Cc","HV001","REGCODE", "HV024","IsRural", "AdName","x","y")
+
+
+
+temp<- aggregate(x=data$Pg_num, by=list(data$HV001), 'mean', na.rm = T)
+myPosVec = match(myClu$HV001,temp$Group.1 )
+myClu$Pg_num = temp$x[myPosVec]
+
+temp<- aggregate(x=ifelse(data$Pg_num==0,NA,data$Pg_num), by=list(data$HV001), 'mean', na.rm = T)
+myPosVec = match(myClu$HV001,temp$Group.1 )
+myClu$Pg_hs = temp$x[myPosVec]
+
+temp<- aggregate(x=data$Pg_h, by=list(data$HV001), 'mean', na.rm = T)
+myPosVec = match(myClu$HV001,temp$Group.1 )
+myClu$Pg_h = temp$x[myPosVec]  
+
+temp<- aggregate(x=data$Pg_2, by=list(data$HV001), 'mean', na.rm = T)
+myPosVec = match(myClu$HV001,temp$Group.1 )
+myClu$Pg_2 = temp$x[myPosVec]    
+
+temp<- aggregate(x=data$wc1, by=list(data$HV001), 'mean', na.rm = T)
+myPosVec = match(myClu$HV001,temp$Group.1 )
+myClu$wc1 = temp$x[myPosVec]  
+
+
+temp<- aggregate(x=data$wc2, by=list(data$HV001), 'mean', na.rm = T)
+myPosVec = match(myClu$HV001,temp$Group.1 )
+myClu$wc2 = temp$x[myPosVec]   
+
+
+temp<- aggregate(x=data$w1, by=list(data$HV001), 'mean', na.rm = T)
+myPosVec = match(myClu$HV001,temp$Group.1 )
+myClu$w1 = temp$x[myPosVec]   
+
+
+temp<- aggregate(x=data$w2, by=list(data$HV001), 'mean', na.rm = T)
+myPosVec = match(myClu$HV001,temp$Group.1 )
+myClu$w2 = temp$x[myPosVec]   
+
+temp<- aggregate(x=data$w3, by=list(data$HV001), 'mean', na.rm = T)
+myPosVec = match(myClu$HV001,temp$Group.1 )
+myClu$w3 = temp$x[myPosVec]   
+
+temp<- aggregate(x=data$w4, by=list(data$HV001), 'mean', na.rm = T)
+myPosVec = match(myClu$HV001,temp$Group.1 )
+myClu$w4 = temp$x[myPosVec]   
+
+temp<- aggregate(x=data$w5, by=list(data$HV001), 'mean', na.rm = T)
+myPosVec = match(myClu$HV001,temp$Group.1 )
+myClu$w5 = temp$x[myPosVec]   
+```
+
+## Livestock ownership
+
+This map looks at housholds that have reported pigs
+```{r pressure, echo=FALSE}
+ggplot() + geom_polygon(data=admin2, aes(x=long, y=lat, group=group), fill="grey80", colour="grey90", alpha=1) + geom_point(data=myClu, aes(x=x, y=y,color=Pg_h) ) + scale_colour_gradientn(colours=heat.colors(12))+    coord_equal(ratio=1)
+```
+
+
+```{r kpressure, echo=FALSE}
+grid<-makegrid(shp, cellsize=0.0083)
+coordinates(grid)<-~x1+x2
+geodata<-myClu
+coordinates(geodata)<- ~x+y
+vgm = variogram(Pg_h~1, geodata)
+fit = fit.variogram(vgm, model = vgm(0.03, "Sph", 2, 0.01))
+plot(vgm, fit)
+kriged = krige(Pg_h~1, geodata, grid, model = fit)
+ggplot(data=kriged@data, aes(x=kriged$x1, y=kriged$x2)) + geom_tile(aes(fill=kriged$var1.pred)) + coord_equal() +
+  scale_fill_gradient(low = "yellow", high="red") +
+  geom_polygon(data=admin2, aes(x=long, y=lat, group=group), color="black", alpha=0)+ theme_bw()
+
+```
+
+This sections looks at flock sizes from households who have reported owning pigs 
+```{r hs, echo=FALSE}
+ggplot() + geom_polygon(data=admin2, aes(x=long, y=lat, group=group), fill="grey80", colour="grey90", alpha=1) + geom_point(data=myClu, aes(x=x, y=y,color=Pg_hs) ) + scale_colour_gradientn(colours=heat.colors(12))+    coord_equal(ratio=1)
+```
+
+```{r kpressure2, echo=FALSE}
+idw = idw(Pg_hs ~1, geodata[!is.na(geodata$Pg_hs),],grid, maxdist = Inf, idp = 2)
+ggplot(data=idw@data, aes(x=idw$x1, y=idw$x2)) + geom_tile(aes(fill=idw$var1.pred)) + coord_equal() +
+  scale_fill_gradient(low = "yellow", high="red") +
+  geom_polygon(data=admin2, aes(x=long, y=lat, group=group), color="black", alpha=0)+ theme_bw()
+```
+
+in order to compute pig density we do the following calculation : 
+population (from world pop 2015 unadjusted) x percent of household keeping pigs x flock size
+
+```{r pop, echo=FALSE}
+pop<-raster('pop/UGA_ppp_v2b_2015.tif')
+
+gridded(kriged)<-T
+Pg_h_r <- raster(kriged, "var1.pred")
+Pg_h_r<-mask(Pg_h_r,shp)
+gridded(idw)<-T
+Pg_hs_r<-raster(idw, "var1.pred")
+Pg_hs_r<-mask(Pg_hs_r,shp)
+pop<-resample(pop,Pg_h_r)
+Pg_den<-pop*10*Pg_h_r*Pg_hs_r#*10 because of the resolution change
+plot(Pg_den)
+Pg_den_co<-Pg_den
+Pg_den_co[Pg_den_co>100]<-NA
+plot(Pg_den_co)
+```
+
+This map does not show much variation because there is an overestimation of pig density in urban areas. So we re-run it showing taking the extreme value out, i.e values above 50. Then a pattern appears.
+Let us compare it with the FAO Robinson pig distribution map. (my laptop does not manage to do this,i'll rerun from office)
+
+
+```{r  distpop, echo=F}
+#this is robinson 2006
+# ppop<-raster('H:/GIS data/global/livestock_data/PIGS/Glb_Pigs_CC2006_AD.tif')
+# ppop<-mask(ppop,shp)
+# ppop<-crop(ppop,shp)
+# ppop<-resample(ppop,Pg_h_r)
+# writeRaster(ppop,'ppop.tif', overwrite=T)
+ppop<-raster('ppop.tif')
+breakpoints <- c(0, 1, 2, 5, 10, 25, 75, 250,1000, 3000)
+colors <- c("gray90",rainbow_hcl(7))
+plot(ppop, breaks = breakpoints, col= colors)
+plot(admin, add=T)
+```
+
+
+
+## extensive system 
+This these are places where people let there pigs roam and therefore there is high potential for diseases 
+
+```{r extensive, echo=FALSE}
+ggplot() + geom_polygon(data=admin2, aes(x=long, y=lat, group=group), fill="grey80", colour="grey90", alpha=1) + geom_point(data=myClu, aes(x=x, y=y,color=Pg_2) ) + scale_colour_gradientn(colours=heat.colors(12))+    coord_equal(ratio=1)
+```
+
+```{r extensivek, echo=FALSE}
+vgm = variogram(Pg_2~1, geodata)
+fit = fit.variogram(vgm, model = vgm(0.03, "Sph", 2, 0.01))
+plot(vgm, fit)
+kriged = krige(Pg_2~1, geodata, grid, model = fit)
+ggplot(data=kriged@data, aes(x=kriged$x1, y=kriged$x2)) + geom_tile(aes(fill=kriged$var1.pred)) + coord_equal() +
+  scale_fill_gradient(low = "yellow", high="red") +
+  geom_polygon(data=admin2, aes(x=long, y=lat, group=group), color="black", alpha=0)+ theme_bw()
+gridded(kriged)<-T
+Pg_2<-raster(kriged,"var1.pred")
+```
+
+
+## sanitation
+These maps show the percentage of household with low sanitation facilities
+The first map is about household who have no facilities at all 
+```{r sanitation, echo=FALSE}
+ggplot() + geom_polygon(data=admin2, aes(x=long, y=lat, group=group), fill="grey80", colour="grey90", alpha=1) + geom_point(data=myClu, aes(x=x, y=y,color=wc2) ) + scale_colour_gradientn(colours=heat.colors(12))+    coord_equal(ratio=1)
+```
+
+
+```{r sank1, echo=FALSE}
+vgm = variogram(wc2~1, geodata)
+fit = fit.variogram(vgm, model = vgm(0.03, "Sph", 2, 0.01))
+plot(vgm, fit)
+kriged = krige(wc2~1, geodata, grid, model = fit)
+ggplot(data=kriged@data, aes(x=kriged$x1, y=kriged$x2)) + geom_tile(aes(fill=kriged$var1.pred)) + coord_equal() +
+  scale_fill_gradient(low = "yellow", high="red") +
+  geom_polygon(data=admin2, aes(x=long, y=lat, group=group), color="black", alpha=0)+ theme_bw()
+gridded(kriged)<-T
+wc2<-raster(kriged,"var1.pred")
+```
+
+
+
+And in this one with no sanitation or uncovered facilities
+```{r sanitation4, echo=FALSE}
+ggplot() + geom_polygon(data=admin2, aes(x=long, y=lat, group=group), fill="grey80", colour="grey90", alpha=1) + geom_point(data=myClu, aes(x=x, y=y,color=wc1) ) + scale_colour_gradientn(colours=heat.colors(12))+    coord_equal(ratio=1)
+```
+
+```{r sank2, echo=FALSE}
+vgm = variogram(wc1~1, geodata)
+fit = fit.variogram(vgm, model = vgm(0.03, "Sph", 2, 0.01))
+plot(vgm, fit)
+kriged = krige(wc1~1, geodata, grid, model = fit)
+ggplot(data=kriged@data, aes(x=kriged$x1, y=kriged$x2)) + geom_tile(aes(fill=kriged$var1.pred)) + coord_equal() +
+  scale_fill_gradient(low = "yellow", high="red") +
+  geom_polygon(data=admin2, aes(x=long, y=lat, group=group), color="black", alpha=0)+ theme_bw()
+gridded(kriged)<-T
+wc1<-raster(kriged,"var1.pred")
+```
+
+## poverty level
+based on percentage of household in the poorest 20%
+
+```{r sanitation3, echo=FALSE}
+ggplot() + geom_polygon(data=admin2, aes(x=long, y=lat, group=group), fill="grey80", colour="grey90", alpha=1) + geom_point(data=myClu, aes(x=x, y=y,color=w1) ) + scale_colour_gradientn(colours=heat.colors(12))+    coord_equal(ratio=1)
+```
+
+```{r wealth1, echo=FALSE}
+vgm = variogram(w1~1, geodata)
+fit = fit.variogram(vgm, model = vgm(0.03, "Wav", 2, 0.01))
+plot(vgm, fit)
+kriged = krige(w1~1, geodata, grid, model = fit)
+ggplot(data=kriged@data, aes(x=kriged$x1, y=kriged$x2)) + geom_tile(aes(fill=kriged$var1.pred)) + coord_equal() +
+  scale_fill_gradient(low = "yellow", high="red") +
+  geom_polygon(data=admin2, aes(x=long, y=lat, group=group), color="black", alpha=0)+ theme_bw()
+gridded(kriged)<-T
+w1<-raster(kriged,"var1.pred")
+```
+percentage of poor in the 40% percent poorest category (poorest and poor)
+```{r wealth2a, echo=FALSE}
+ggplot() + geom_polygon(data=admin2, aes(x=long, y=lat, group=group), fill="grey80", colour="grey90", alpha=1) + geom_point(data=myClu, aes(x=x, y=y,color=(w1+w2) )) + scale_colour_gradientn(colours=heat.colors(12))+    coord_equal(ratio=1)
+```
+
+```{r wealth2, echo=FALSE}
+vgm = variogram((w1=w2)~1, geodata)
+fit = fit.variogram(vgm, model = vgm(0.03, "Sph", 2, 0.01))
+plot(vgm, fit)
+kriged = krige((w1+w2)~1, geodata, grid, model = fit)
+ggplot(data=kriged@data, aes(x=kriged$x1, y=kriged$x2)) + geom_tile(aes(fill=kriged$var1.pred)) + coord_equal() +
+  scale_fill_gradient(low = "yellow", high="red") +
+  geom_polygon(data=admin2, aes(x=long, y=lat, group=group), color="black", alpha=0)+ theme_bw()
+gridded(kriged)<-T
+w2<-raster(kriged,"var1.pred")
+```
+
+# Investigating the distribution of the key variables to define meaningful breaks into high and low
+## livestock ownership distribution
+for the final map we are using the 3rd quantile, i.e. the map shows were the 25% clusters with most households with pigs are. 
+```{r distr, echo=T}
+hist(Pg_h_r@data@values)
+summary(Pg_h_r@data@values)
+Pg_h_b<-Pg_h_r
+Pg_h_b[Pg_h_r>0.23]<-1
+Pg_h_b[Pg_h_b<0.23]<-0
+plot(Pg_h_b)
+```
+## pig population 
+based on DHS computation
+```{r distr2, echo=T}
+hist(Pg_den@data@values)
+summary(Pg_den@data@values)
+Pg_den_b<-Pg_den
+Pg_den_b[Pg_den>1]<-1
+Pg_den_b[Pg_den_b<1]<-0
+plot(Pg_den_b)
+plot(admin,add=T)
+```
+based on FAO Robinson layer (this does not work yet)
+```{r distr3, echo=T}
+hist(ppop@data@values)
+summary(ppop@data@values)
+Pg_den_b2<-ppop
+Pg_den_b2[ppop>1]<-1
+Pg_den_b2[Pg_den_b2<1]<-0
+plot(Pg_den_b2)
+plot(admin,add=T)
+```
+
+## pig extensive rural system 
+```{r distr4, echo=T}
+hist(Pg_2@data@values)
+summary(Pg_2@data@values)
+Pg_2_b<-Pg_2
+Pg_2_b[Pg_2>0.153]<-1
+Pg_2_b[Pg_2<0.153]<-0
+plot(Pg_den_b)
+```
+## poverty the 40% poorest
+
+```{r distr5, echo=T}
+hist(w2@data@values)
+summary(w2@data@values)
+w2_b<-w2
+w2_b[w2>0.666]<-1
+w2_b[w2_b<0.666]<-0
+plot(w2_b)
+```
+
+
+## uncovered sanitation
+
+```{r distr6, echo=T}
+hist(wc1@data@values)
+summary(wc1@data@values)
+wc1_b<-wc1
+wc1_b[wc1>0.408]<-1
+wc1_b[wc1_b<0.408]<-0
+plot(wc1_b)
+```
+
+
+## poverty the 40% poorest
+
+```{r distr7, echo=T}
+hist(w1@data@values)
+summary(w1@data@values)
+w1_b<-w1
+w1_b[w1>0.438]<-1
+w1_b[w1_b<0.438]<-0
+plot(w1_b)
+plot(admin,add=T)
+```
+
+#First overlays 
+## proportion of households with bad sanitation, proportion of extensive households and poverty 
+
+* A proportion of households bad sanitation high =1 is low = 0
+* B proportion of poor 40% is high = 1.01 is low zero 
+* C proportion of extensive households is high =1.1 is low =0 
+
+1. 0 = ABC low 
+2. 1 = A high (yellow)
+3. 1.01 = B high (blue)
+4. 1.1 = C high (red)
+5. 2.01= AB high (green)
+6. 2.1 = AC high (orange)
+7. 2.11= BC high (purple)
+8. 3.11= ABC high (brown)
+
+```{r overlay1, echo=T}
+breakpoints <- c(0, 0.99, 1.0099, 1.099, 2.0099, 2.099, 2.1099, 3.1099,3.12)
+breakpoints2 <- c('all low','A' , 'B', 'C', 'AB', 'AC', 'BC', 'ABC')
+colors <- c( "gray90","gold","steelblue1","red","springgreen",'orange','plum1', "brown")
+
+over1<-wc1_b+Pg_2_b*1.1+w2_b*1.01
+over1<-mask(over1,admin)
+plot(over1,breaks=breakpoints,col=colors, legend=FALSE)
+legend("bottomleft", inset=.02, title="classes", legend = breakpoints2
+   , fill  =colors, horiz=F, cex=0.8)
+plot(admin,add=T)
+
+```
+
+ 
+
+## proportion of household with bad sanitaiton, proportion of extensive households and pig distribution (Robinson) 
+
+* A proportion of households bad sanitation high =1 is low = 0
+* B pig density   is high  = 1.01 is low zero (robinson)
+* C proportion of extensive households is high =1.1 is low =0 
+
+
+```{r overlay2, echo=T}
+over2<-wc1_b+Pg_2_b*1.1+Pg_den_b2*1.01
+plot(over2,breaks=breakpoints,col=colors, legend=FALSE) 
+legend("bottomleft", inset=.02, title="classes", legend = breakpoints2
+   , fill=colors, horiz=F, cex=0.8)
+plot(admin,add=T)
+```
+
+
+
+## proportion of household with bad sanitaiton, proportion of extensive households and pig distribution (Robinson) 
+
+* A proportion of households bad sanitation high =1 is low = 0
+* B pig density   is high  = 1.01 is low zero 
+* C proportion of extensive households is high =1.1 is low =0 
+
+
+```{r overlay3, echo=T}
+over3<-wc1_b+Pg_2_b*1.1+w1_b*1.01
+plot(over3,breaks=breakpoints,col=colors, legend=FALSE) 
+legend("bottomleft", inset=.02, title="classes", legend = breakpoints2
+   , fill=colors, horiz=F, cex=0.8)
+plot(admin,add=T)
+
+```
+
+
+* A proportion of households bad sanitation high =1 is low = 0
+* B pig density   is high  = 1.01 is low zero  from DHS
+* C proportion of extensive households is high =1.1 is low =0 
+
+
+```{r overlay4, echo=T}
+over4<-wc1_b+Pg_2_b*1.1+Pg_den_b*1.01
+plot(over4,breaks=breakpoints,col=colors, legend=FALSE) 
+legend("bottomleft", inset=.02, title="classes", legend = breakpoints2
+   , fill=colors, horiz=F, cex=0.8)
+plot(admin,add=T)
+
+```
+
+* A proportion of households bad sanitation high =1 is low = 0
+* B pig density   is high  = 1.01 is low zero robinson
+* C proportion of poor 40% is high = 1.1 is low zero 
+
+This is the final one 
+```{r overlay5, echo=T}
+breakpoints <- c(0, 0.99, 1.0099, 1.099, 2.0099, 2.099, 2.1099, 3.1099,3.12)
+breakpoints2 <- c('all low','A' , 'B', 'C', 'AB', 'AC', 'BC', 'ABC')
+colors <- c( "gray90","gold","steelblue1","red","springgreen",'orange','plum1', "brown")
+
+over5<-wc1_b+Pg_den_b2*1.01+w2_b*1.1
+plot(over5,breaks=breakpoints,col=colors, legend=FALSE) 
+legend("bottomleft", inset=.02, title="classes", legend = breakpoints2
+   , fill=colors, horiz=F, cex=0.8)
+plot(admin,add=T)
+invisible(text(getSpPPolygonsLabptSlots(admin), labels=as.character(admin$label), cex=0.6))
+
+writeRaster(wc1_b,'wc1_b.tif')
+writeRaster(Pg_den_b2,'Pg_den_b2.tif')
+writeRaster(w2_b,'w2_b.tif')
+
+writeRaster(wc1,'wc1.tif')
+writeRaster(Pg_den,'Pg_den.tif')
+writeRaster(w2_b,'w2.tif')
+
+
+```
+
+
+
+
+
+
+
